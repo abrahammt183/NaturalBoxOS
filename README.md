@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/images/NaturalBoxOS.png" alt="NaturalBoxOS Logo" width="700">
-</p>
+![NaturalBoxOS Logo](DOCS/images/NaturalBoxOS.png)
 
 # NaturalBoxOS
 
