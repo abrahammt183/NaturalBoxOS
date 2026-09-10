@@ -4,8 +4,8 @@
 
 An **InnerBox** is a child Box whose RealParentBox and FosterParentBox are the same Box.
 
-An InnerBox is created when its RealParentBox is a ClosedBox or it's box field.
-is set to "in".
+An InnerBox is a child Box whose box field is set to in.
+
 ## Purpose
 
 An InnerBox is private to its RealParentBox and is not shared with other Boxes.
@@ -17,3 +17,6 @@ An InnerBox is private to its RealParentBox and is not shared with other Boxes.
 - G-008 — RealParentBox
 - G-009 — FosterParentBox
 - G-011 — OuterBox
+
+## Notes
+An InnerBox has the same RealParentBox and FosterParentBox.
