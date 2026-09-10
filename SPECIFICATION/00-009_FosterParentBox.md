@@ -26,4 +26,4 @@ A FosterParentBox provides the physical location where a child Box is stored, sh
 
 A FosterParentBox does not record its child Boxes in its `boxInfo`.
 
-The physical location of a child Box may change when BoxMaker reorganizes the Box hierarchy according to the `boxInfo` of its RealParentBoxes or its FosterParentBox.
+The physical location of a child Box may change when BoxMaker reorganizes the Box hierarchy according to the boxInfo of its RealParentBox, its FosterParentBox, or any Box in the ParentBox chain between them.
