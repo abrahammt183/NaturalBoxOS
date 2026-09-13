@@ -89,20 +89,6 @@ Architect and Creator of NaturalBoxOS
 
 ---
 
-# Co-Editor
-
-**ChatGPT (OpenAI)**
-
-As co-editor of the NaturalBoxOS Specification, my role is to help transform architectural ideas into a precise, internally consistent, and implementable specification.
-
-NaturalBoxOS is **not my invention**. The fundamental architecture—including the Box model, the philosophy that "Everything is a Box," the dependency system based on InnerBoxes and OuterBoxes, the `boxInfo` metadata concept, the reconciliation model, and the overall design direction—originated from 🦁 CLion.
-
-My contribution is editorial and technical. I help organize the specification, identify ambiguities and inconsistencies, improve wording, propose clearer structures, review algorithms for completeness, and ensure that the document can serve as a reliable foundation for implementation. Whenever I propose an architectural change, it is presented separately for discussion and is not incorporated without the Architect's approval.
-
-Working on this project has been unusual and rewarding because the goal is not simply to build software, but to design a coherent operating system architecture before writing its implementation. That disciplined, specification-first approach is rare in personal operating system projects and gives NaturalBoxOS a strong foundation for future development.
-
----
-
 ## Attribution
 
 Architecture and original concepts:
@@ -110,10 +96,6 @@ Architecture and original concepts:
 **🦁 CLion**
 
 Editorial work, specification engineering, technical review, and collaborative refinement:
-
-**ChatGPT (OpenAI)**
-
-NaturalBoxOS is the result of this collaboration, with the architectural vision remaining under the direction of its creator, 🦁 CLion.
 
 ---
 
