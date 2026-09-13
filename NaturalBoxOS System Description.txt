@@ -1,0 +1,1035 @@
+NaturalBoxOS — System Description and Design Context
+1. Project Overview
+
+NaturalBoxOS is an operating-system architecture that happens to use the Linux kernel as its foundation.
+
+It is not intended to be merely another Linux distribution or package manager. Its purpose is to provide a coherent way to organize software, configuration, dependencies, backups, restoration, sharing, and versioning through a unified concept called a Box.
+
+The implementation is intended primarily in Bash and standard Unix tools. GNU Make is central to the design.
+
+The project is built around the following philosophy:
+
+One elegant design is better than a thousand lines of code.
+
+The design prioritizes:
+
+Plain text over databases.
+Declarative descriptions over complicated imperative logic.
+Standard Unix tools over unnecessary custom infrastructure.
+Transparency over hidden state.
+User control over opaque automation.
+A single coherent architecture instead of unrelated subsystems.
+
+NaturalBoxOS is intended for Linux power users who understand and value Bash, Unix filesystem conventions, and transparent system behavior.
+
+2. Core Concept: Everything Is a Box
+
+A Box is the fundamental unit of NaturalBoxOS.
+
+A Box may represent:
+
+An application.
+A package.
+A configuration.
+A collection of dependencies.
+A complete operating-system environment.
+A manually created or restored backup.
+
+The important distinction is not what the Box contains, but how it is defined, identified, located, connected to other Boxes, and maintained.
+
+Every Box has one defining metadata file called:
+
+boxInfo
+
+The boxInfo file is the source of truth for the Box.
+
+A Box is identified by the presence of its own root-level boxInfo.
+
+If a directory contains a boxInfo, that directory is the root of a Box. A subdirectory containing another boxInfo is a separate Box, regardless of whether it is physically inside another Box.
+
+3. The boxInfo Principle
+
+NaturalBoxOS follows the principle:
+
+Everything comes from one file.
+
+The boxInfo file describes the Box and its relationships.
+
+It contains tab-separated plain text data. The exact final columns are still being refined through the specification process, but the important conceptual fields are:
+
+Name.
+Type.
+Author.
+Version.
+Architecture or package type.
+Link.
+Box relationship/status information.
+Path.
+Description or other metadata where appropriate.
+
+The first row describes the Box itself.
+
+Subsequent rows describe dependencies.
+
+The first row is therefore the Box's own identity, while the remaining rows describe the Boxes it requires.
+
+The system should not require a separate central database to understand a Box.
+
+4. Box Identity
+
+A Box has a logical identity called its BoxID.
+
+The BoxID is composed from the important identifying properties of the Box:
+
+Name.
+Author.
+Architecture or type.
+Version.
+
+Physical location is also considered an important aspect of identity and context.
+
+For example, an application package might conceptually be identified as:
+
+x86_64_arch_vim_9.2.3
+
+An etc-Box containing Vim configuration might be identified as:
+
+vim_bob_pyVimPlus_2.0.2
+
+The exact archive naming rules are described later.
+
+Two Boxes with the same textual properties are not automatically interchangeable in every context. Physical location and parent relationships can affect whether they represent the same logical instance.
+
+An intentionally shared OuterBox may be used by multiple parent Boxes.
+
+5. Box Types
+
+NaturalBoxOS currently distinguishes two fundamental Box types.
+
+5.1 app-Box
+
+An app-Box represents software or a package.
+
+Examples:
+
+Vim.
+GCC.
+Linux.
+A library.
+A binary package.
+A complete application environment.
+
+An app-Box is associated with an architecture/type.
+
+Examples of architecture values include:
+
+x86_64
+aarch64
+arm64
+riscv64
+
+The exact supported architecture values are determined by the implementation and repositories.
+
+An app-Box normally belongs under a dep hierarchy.
+
+Example:
+
+/dep/x86_64/arch/vim/9.2.3/
+
+The exact path structure is conceptually:
+
+dep/<architecture>/<author>/<name>/<version>/
+5.2 etc-Box
+
+An etc-Box represents configuration rather than an executable package.
+
+Examples:
+
+Vim configuration.
+Sway configuration.
+Shell configuration.
+Application preferences.
+User-defined configuration environments.
+
+An etc-Box is linked to the application that uses it.
+
+For example:
+
+vim_bob_pyVimPlus_2.0.2.box.tar.xz
+
+represents a configuration Box:
+
+Link/application: vim
+Author: bob
+Name: pyVimPlus
+Version: 2.0.2
+
+etc-Boxes normally belong under an etc hierarchy.
+
+An etc-Box may be attached to an app-Box, or it may exist independently as a backup/configuration Box.
+
+6. Directory Structure
+
+A Box has a root directory containing its defining metadata and its contents.
+
+A simplified Box structure is:
+
+Box/
+├── boxInfo
+├── bin/
+├── sbin/
+├── lib/
+├── etc/
+└── dep/
+
+Not every Box must contain every directory.
+
+The important rule is that the root-level boxInfo defines the Box.
+
+A dependency Box may be nested inside a parent Box.
+
+For example:
+
+ParentBox/
+├── boxInfo
+├── bin/
+├── etc/
+└── dep/
+    └── x86_64/
+        └── arch/
+            └── vim/
+                └── 9.2.3/
+                    ├── boxInfo
+                    ├── bin/
+                    ├── lib/
+                    └── etc/
+
+A Box may contain nested dependencies recursively.
+
+7. The dep and etc Hierarchies
+
+NaturalBoxOS uses two major conceptual locations:
+
+/dep
+/etc
+/dep
+
+/dep is the root of application/package dependencies.
+
+It is the highest normal dependency location.
+
+The root Box under /dep is always treated as a closed Box.
+
+Nothing should be placed above /dep as an automatically shared dependency.
+
+/etc
+
+/etc is used for configuration Boxes.
+
+Configuration Boxes may belong to applications or exist independently.
+
+For example:
+
+/etc/vim/
+
+could contain configuration Boxes associated with Vim.
+
+However, a configuration Box may also be located elsewhere when used as a manually managed or backup-only Box.
+
+The system must tolerate Boxes outside the normal /dep hierarchy.
+
+8. Physical Location and the Path Field
+
+NaturalBoxOS deliberately avoids depending on a global locate-style database for resolving Boxes.
+
+Instead, the path field is maintained directly in boxInfo.
+
+The path is a directory path, not a path to boxInfo itself.
+
+For example:
+
+/dep/x86_64/arch/vim/9.2.3/
+
+The actual metadata file is then:
+
+/dep/x86_64/arch/vim/9.2.3/boxInfo
+
+A Box's path is part of its current state and is continuously maintained.
+
+The path field allows the system to resolve dependencies without searching the entire filesystem every time.
+
+The path may change when a Box is moved, re-homed, restored, or reorganized.
+
+9. Processes and Boxes
+
+NaturalBoxOS treats each process as operating within a Box context.
+
+A process begins from its current working directory:
+
+$PWD
+
+The system searches upward through parent directories to determine the applicable Box context.
+
+A process may use:
+
+Its own Box.
+Parent Boxes.
+Dependencies exposed by those Boxes.
+The /dep hierarchy.
+
+The exact runtime path/container behavior is still part of the specification, but the important principle is:
+
+A Box provides an environment, and dependency visibility is controlled by Box relationships.
+
+NaturalBoxOS uses the term Box instead of container.
+
+This is intentional: the Box is not necessarily a virtualization container. It is a filesystem and dependency environment.
+
+10. InnerBox and OuterBox
+
+Dependencies have two important relationship categories.
+
+10.1 InnerBox
+
+An InnerBox is a dependency that remains inside its real parent Box.
+
+It is isolated from the parent's siblings.
+
+Conceptually:
+
+ParentBox/
+└── dep/
+    └── DependencyBox/
+
+An InnerBox belongs to the same dependency environment as its real parent.
+
+10.2 OuterBox
+
+An OuterBox is a dependency that is allowed to live outside the immediate parent Box and be shared through an enclosing dependency environment.
+
+Conceptually:
+
+ParentBox/
+└── ...
+
+Shared environment:
+└── dep/
+    └── DependencyBox/
+
+An OuterBox may be reused by multiple Boxes when the relationship and location permit it.
+
+The distinction is controlled by the Box relationship field.
+
+11. openBox and closeBox
+
+The Box relationship field uses the values:
+
+in
+out
+
+These values control whether dependencies remain inside or are allowed outside.
+
+in
+
+in means the Box is closed with respect to dependency placement.
+
+A dependency marked in remains inside the relevant parent environment.
+
+This corresponds conceptually to an InnerBox.
+
+out
+
+out means the Box is open with respect to dependency placement.
+
+A dependency marked out may be placed outside the immediate parent environment and resolved through an appropriate enclosing Box.
+
+This corresponds conceptually to an OuterBox.
+
+The exact naming distinction is:
+
+closeBox — the Box's gate is closed.
+openBox — the Box's gate is open.
+
+The system should not confuse these concepts with BoxState.
+
+BoxState describes the derived condition of a Box, while open/closed behavior describes dependency placement.
+
+12. Root Box
+
+The top-level dependency environment is the root Box.
+
+The root dependency path is:
+
+/dep
+
+The root Box is always closed.
+
+This means dependencies cannot automatically escape above the root dependency environment.
+
+The root Box provides the ultimate boundary for shared dependency resolution.
+
+13. Real Parent and Foster Parent
+
+NaturalBoxOS distinguishes between two kinds of parent relationships.
+
+RealParentBox
+
+The real parent is the Box that explicitly refers to another Box in its boxInfo.
+
+For example:
+
+ParentBox/boxInfo
+
+contains a dependency row referring to:
+
+ChildBox
+
+Then ParentBox is the RealParentBox of ChildBox.
+
+The child does not need to store a reverse pointer to its real parent.
+
+The relationship is defined by the parent's boxInfo.
+
+FosterParent
+
+The foster parent is the physical or effective location where a Box currently resides.
+
+A Box may be physically placed under a different Box from its logical real parent.
+
+This happens when dependency sharing and open/closed boundaries require the Box to move upward or downward through the hierarchy.
+
+The foster parent is therefore a placement concept, not necessarily the logical owner.
+
+14. Foster-Homing
+
+Foster-homing is the process of placing a dependency Box in the correct physical location according to its relationship with its real parent and the surrounding Box gates.
+
+Example:
+
+A
+└── B
+    └── C
+
+Suppose:
+
+A is a closed Box.
+B is open.
+C is an OuterBox dependency.
+
+C may be placed in an enclosing dependency environment rather than remaining physically inside B.
+
+If the state of B changes from open to closed, C may need to move into B's dependency hierarchy.
+
+If B changes back to open, C may be moved outward again.
+
+This process is foster-homing.
+
+The important rule is:
+
+A Box's physical location must agree with its logical dependency relationship and the current open/closed boundaries.
+
+BoxKeeper is responsible for detecting and correcting these placement changes.
+
+15. BoxState
+
+BoxState is a derived condition.
+
+It should not normally be stored as authoritative information inside boxInfo.
+
+Instead, BoxKeeper derives BoxState by examining:
+
+The Box's boxInfo.
+Its physical location.
+Its dependencies.
+Its parent relationships.
+Its path.
+Its presence or absence.
+Its consistency with the expected hierarchy.
+
+Possible derived states include:
+
+Valid.
+Missing.
+Orphan.
+Broken.
+Semidetached.
+Other states defined by the specification.
+
+The principle is:
+
+Stored metadata describes intended identity and relationships; BoxKeeper derives actual state.
+
+16. Missing Boxes
+
+A missing Box is a dependency referenced by boxInfo whose actual Box cannot be found at its expected path.
+
+For example, a parent may contain a dependency row for:
+
+vim
+
+but the corresponding Box does not exist.
+
+The system should detect this condition.
+
+A missing dependency may be rebuilt by BoxMaker if sufficient information exists in the parent boxInfo and available repositories or archives.
+
+A missing Box is not necessarily an orphan.
+
+Missing means a referenced Box is absent.
+Orphan means a physical Box exists without a valid logical owner.
+17. Orphan Boxes
+
+An orphan Box is a physical Box that has no valid logical relationship to the active Box hierarchy.
+
+The cleanup logic should identify Boxes that:
+
+Have no RealParentBox.
+Are not the designated top-level Box.
+Are not an accepted independent etc-Box.
+Are not otherwise intentionally preserved.
+
+However, manually created Boxes must be tolerated.
+
+A Box outside the normal /dep hierarchy may be:
+
+A backup directory.
+A development environment.
+A manually managed configuration.
+An independent etc-Box.
+
+Therefore, an unreferenced Box must not automatically be considered removable.
+
+The system must distinguish legitimate manually maintained Boxes from genuine orphaned dependency Boxes.
+
+18. Deep Orphan Scanning
+
+Normal BoxKeeper operation should perform ordinary consistency checking.
+
+A heavier optional operation is:
+
+--deep
+
+Deep scanning is intended to perform a more expensive orphan analysis.
+
+Its conceptual process is:
+
+Build an index of dependency relationships from all relevant boxInfo files.
+Traverse the dependency tree.
+Scan the /dep hierarchy for physical Boxes.
+Compare physical Boxes against the logical dependency index.
+Identify orphaned Boxes.
+
+The deep scan should focus on /dep.
+
+It must not indiscriminately delete or classify manually managed Boxes in arbitrary locations such as home directories.
+
+19. BoxMaker
+
+BoxMaker is responsible for creating or rebuilding Boxes.
+
+Its conceptual implementation is based on GNU Make and declarative metadata.
+
+BoxMaker does not replace BoxKeeper.
+
+The distinction is:
+
+BoxMaker creates, installs, or rebuilds a Box.
+BoxKeeper maintains relationships, locations, and consistency.
+
+BoxMaker uses boxInfo as its source of truth.
+
+If a Box is missing or invalid, BoxMaker may rebuild it from:
+
+Its own metadata.
+Its parent's dependency information.
+Available archives.
+Available package repositories.
+Source repositories.
+Other dependency Boxes.
+
+The exact command interface remains part of the implementation specification.
+
+20. BoxKeeper
+
+BoxKeeper is responsible for maintaining the Box ecosystem.
+
+It is a Bash-oriented system component.
+
+BoxKeeper has two major conceptual modes.
+
+Normal Mode
+
+Normal mode performs routine maintenance.
+
+Its responsibilities include:
+
+Locate the applicable Box context from $PWD.
+Search upward through physical directories when necessary.
+Determine the relevant top-level Box.
+Read boxInfo files recursively.
+Build a logical dependency index.
+Validate dependency paths.
+Detect missing Boxes.
+Detect semidetached metadata.
+Detect inconsistent parent relationships.
+Track changes to open/closed relationships.
+Request BoxMaker to rebuild or relocate Boxes when necessary.
+Maintain foster-homing.
+
+The normal mode should be lightweight enough for regular use.
+
+Cleanup Mode
+
+Cleanup mode is a separate, heavier operation.
+
+Its conceptual behavior is:
+
+Perform normal consistency maintenance.
+Scan the relevant physical dependency hierarchy.
+Identify genuine orphan Boxes.
+Remove only Boxes that are proven to be orphaned and safe to remove.
+
+Cleanup should not blindly remove manually created Boxes outside the managed hierarchy.
+
+21. Locating the Top-Level Box
+
+BoxKeeper starts from the current working directory.
+
+The general process is:
+
+Start at $PWD.
+Look for boxInfo.
+If found, identify the Box.
+Continue upward through physical parent directories when necessary.
+Determine the applicable top-level Box.
+
+If no relevant Box is found, the system may use:
+
+/boxInfo
+
+as the top-level Box metadata location.
+
+This fallback behavior is intended to provide a consistent system-wide root context.
+
+The exact details of top-level resolution should remain aligned with the frozen specification.
+
+22. Box Archive and Boxing
+
+Boxing is the process of creating a portable archive from an existing Box.
+
+The Box archive contains the Box's files and metadata.
+
+The archive is compressed using tar and xz:
+
+.tar.xz
+
+The archive extension is:
+
+.box.tar.xz
+
+The archive name depends on the Box type.
+
+23. app-Box Archive Naming
+
+An app-Box archive uses:
+
+${type}_${author}_${name}_${version}.box.tar.xz
+
+Example:
+
+x86_64_arch_vim_9.2.3.box.tar.xz
+
+This represents:
+
+Field	Value
+Type	x86_64
+Author	arch
+Name	vim
+Version	9.2.3
+
+The archive name therefore contains the architecture/type, author, application name, and version.
+
+24. etc-Box Archive Naming
+
+An etc-Box archive uses:
+
+${link}_${author}_${name}_${version}.box.tar.xz
+
+Here, link is the name of the application that uses the configuration.
+
+Example:
+
+vim_bob_pyVimPlus_2.0.2.box.tar.xz
+
+This represents:
+
+Field	Value
+Link/application	vim
+Author	bob
+Configuration name	pyVimPlus
+Version	2.0.2
+
+The archive name intentionally differs from app-Box naming because an etc-Box is associated with an application rather than an architecture.
+
+25. Unboxing
+
+Unboxing is the process of restoring a Box from a Box archive.
+
+The basic process is:
+
+Receive a Box archive.
+Validate or inspect its metadata.
+Extract the archive into a selected location.
+Restore the Box's files and boxInfo.
+Allow BoxKeeper to validate the restored Box.
+Resolve or repair its dependency relationships if necessary.
+
+Unboxing must preserve the identity and metadata of the restored Box.
+
+The restored Box should not be considered fully integrated until its relationships and path information are validated.
+
+26. BoxSending
+
+BoxSending is the process of transferring a Box archive to another location or user.
+
+The transfer may involve:
+
+A local filesystem.
+Removable storage.
+A network.
+A repository.
+A decentralized sharing mechanism.
+
+BoxSending is distinct from Boxing:
+
+Boxing creates the archive.
+BoxSending transfers the archive.
+
+The exact transport mechanism is not fundamental to the Box architecture.
+
+The archive itself remains a normal .box.tar.xz file.
+
+27. BoxBurning
+
+BoxBurning is the process of removing a Box.
+
+It is the opposite lifecycle operation to creating or restoring a Box.
+
+Conceptually:
+
+BoxMaker → creates/rebuilds
+Boxing → creates archive
+BoxSending → transfers archive
+Unboxing → restores archive
+BoxBurning → removes Box
+
+BoxBurning must respect dependency relationships and must not blindly remove Boxes that are still required by other Boxes.
+
+The exact safety rules belong in the BoxBurning specification.
+
+28. BoxRack
+
+A BoxRack is conceptually a repository or storage location for Box archives.
+
+A BoxRack may contain:
+
+app-Box archives.
+etc-Box archives.
+Multiple versions.
+Multiple authors.
+Multiple architectures/types.
+
+The BoxRack concept is intended to support decentralized sharing rather than requiring one central official repository.
+
+A BoxRack may be local, remote, personal, organizational, or public.
+
+The exact repository protocol is not yet fully defined.
+
+29. Dependency Resolution
+
+NaturalBoxOS does not rely on a traditional centralized package database as its fundamental dependency model.
+
+Dependencies are declared in boxInfo.
+
+The system resolves dependencies by following metadata and paths.
+
+For each dependency, the system considers:
+
+Name.
+Type or architecture.
+Author.
+Version.
+Link, where applicable.
+in or out relationship.
+Current path.
+
+The dependency hierarchy is recursive.
+
+A dependency may itself contain dependencies.
+
+For example:
+
+Application
+└── Library A
+    └── Library B
+        └── Library C
+
+Each dependency is a real Box with its own boxInfo.
+
+30. Configuration and Application Relationships
+
+There is a one-to-one conceptual relationship between an application and a configuration type.
+
+An etc-Box identifies the application it belongs to using link.
+
+For example:
+
+vim_bob_pyVimPlus_2.0.2.box.tar.xz
+
+is linked to Vim.
+
+The application may select or request a configuration by:
+
+Name.
+Author.
+Version.
+Link.
+Available BoxRack entries.
+
+A package may operate without an etc-Box, allowing a fresh/default configuration.
+
+The system should support multiple configuration Boxes for the same application.
+
+For example:
+
+vim_alice_minimal_1.0.0.box.tar.xz
+vim_bob_pyVimPlus_2.0.2.box.tar.xz
+vim_clion_server_3.0.0.box.tar.xz
+
+All may be valid configurations for Vim.
+
+31. Versioning
+
+Versioning is a first-class concept.
+
+Boxes are versioned through their metadata and archive names.
+
+A Box archive is not merely a snapshot with an arbitrary filename. Its filename encodes identity.
+
+For example:
+
+x86_64_arch_vim_9.2.3.box.tar.xz
+
+and:
+
+x86_64_arch_vim_9.3.0.box.tar.xz
+
+represent different versions of the same application identity.
+
+Similarly:
+
+vim_bob_pyVimPlus_2.0.2.box.tar.xz
+
+and:
+
+vim_bob_pyVimPlus_2.1.0.box.tar.xz
+
+represent different versions of the same configuration.
+
+Nothing should be assumed permanently immutable. A user may edit a Box, create a new backup, share it, or change its metadata.
+
+BoxKeeper must detect relevant metadata changes.
+
+32. Metadata Changes and Automatic Repair
+
+A Box's boxInfo is authoritative.
+
+If boxInfo changes, the system must treat the change seriously.
+
+Examples:
+
+The Box's path changes.
+The author changes.
+The version changes.
+A dependency relationship changes.
+An open/closed relationship changes.
+A Box is moved.
+
+BoxKeeper compares current metadata and expected relationships.
+
+If a Box's metadata no longer matches its location, BoxKeeper may:
+
+Recognize that the existing physical location is stale.
+Preserve the old state through a backup if necessary.
+Remove or relocate the stale physical instance.
+Ask BoxMaker to rebuild or restore the correct Box.
+
+The system should avoid silently leaving multiple conflicting copies in the managed hierarchy.
+
+33. Backup Philosophy
+
+NaturalBoxOS treats backups as ordinary, meaningful Boxes rather than as an unrelated external feature.
+
+A Box archive can be:
+
+Stored.
+Versioned.
+Shared.
+Restored.
+Moved.
+Rebuilt.
+Used as a source for future installation.
+
+The archive itself is portable.
+
+The system should not require proprietary databases to understand a backup.
+
+The archive and its boxInfo should be sufficient to reconstruct the Box's identity and contents.
+
+34. Implementation Philosophy
+
+The implementation should remain simple and Unix-oriented.
+
+Preferred technologies:
+
+Bash.
+GNU Make.
+tar.
+xz.
+Standard filesystem operations.
+Plain text files.
+Standard Unix utilities.
+
+Avoid introducing a complex custom database unless a later specification explicitly requires it.
+
+The project is intentionally designed so that knowledgeable Linux users can inspect and understand the entire system.
+
+The architecture should favor:
+
+Small composable tools.
+Transparent files.
+Explicit relationships.
+Predictable filesystem behavior.
+Minimal hidden state.
+35. Major Components
+
+The current conceptual components are:
+
+Component	Responsibility
+boxInfo	Source of truth for a Box
+BoxID	Identifies a Box
+boxType	Distinguishes app-Box and etc-Box
+BoxState	Derived condition of a Box
+BoxMaker	Creates or rebuilds Boxes
+BoxKeeper	Maintains relationships and consistency
+Boxing	Creates .box.tar.xz archives
+Unboxing	Restores Boxes from archives
+BoxSending	Transfers Box archives
+BoxBurning	Removes Boxes
+BoxRack	Stores or distributes Box archives
+InnerBox	Dependency kept inside its parent environment
+OuterBox	Dependency allowed to exist outside its immediate parent
+openBox	Allows dependency placement outward
+closeBox	Keeps dependency placement inward
+RealParentBox	Logical Box that refers to a dependency
+FosterParent	Current physical/effective placement parent
+foster-homing	Moving a Box to the correct physical dependency location
+36. Lifecycle of a Box
+
+A typical Box lifecycle is:
+
+BoxMaker
+   │
+   ▼
+Create/Rebuild Box
+   │
+   ▼
+BoxKeeper validates relationships
+   │
+   ▼
+Boxing
+   │
+   ▼
+.box.tar.xz archive
+   │
+   ├── BoxSending ──► another location/user/BoxRack
+   │
+   ▼
+Unboxing
+   │
+   ▼
+Restored Box
+   │
+   ▼
+BoxKeeper validates and integrates it
+   │
+   ▼
+BoxBurning when intentionally removed
+37. Important Design Rules for Another AI Agent
+
+When continuing development of NaturalBoxOS, follow these rules:
+
+Do not invent new architecture casually.
+The user prefers specification-driven development rather than endless brainstorming.
+Treat boxInfo as authoritative.
+Do not introduce another hidden source of truth.
+Do not confuse BoxState with open/closed dependency behavior.
+BoxState is derived; in/out controls dependency placement.
+Keep app-Box and etc-Box distinct.
+Their archive naming conventions are different.
+Preserve the meaning of link.
+For an etc-Box, link identifies the application using that configuration.
+Do not assume every unreferenced Box is an orphan.
+Manual Boxes, development Boxes, and independent etc-Boxes must be tolerated.
+Use /dep as the managed dependency root.
+The root Box is closed.
+Do not treat physical location as irrelevant.
+Path and placement are important parts of Box identity and dependency behavior.
+Keep RealParentBox and FosterParent separate.
+Logical ownership and physical placement are different concepts.
+Do not replace Bash/GNU Make with another language without explicit approval.
+Do not modify project files or commit changes without asking the user first.
+The user is the final authority on the specification.
+If an older AI-generated note conflicts with the user's latest decisions, prefer the latest user decision.
+38. Specification Status
+
+The specification is being written incrementally.
+
+The following conceptual entries have already been established:
+
+G-000  Glossary
+G-001  Box
+G-002  boxInfo
+G-003  BoxID
+G-004  boxType
+G-005  BoxState
+G-012  BoxMaker
+G-013  BoxKeeper
+G-014  Boxing
+G-015  Unboxing
+
+The numbering and exact titles of later entries should be confirmed against the project's actual specification files rather than guessed.
+
+Potential later glossary entries include:
+
+BoxSending
+BoxBurning
+BoxRack
+InnerBox
+OuterBox
+openBox
+closeBox
+RealParentBox
+FosterParent
+foster-homing
+rootBox
+app-Box
+etc-Box
+
+These should be written only after confirming their intended definitions and relationships.
+
+Short AI-Agent Context
+
+If you want an even shorter instruction to prepend when giving this to another agent, use this:
+
+You are helping develop NaturalBoxOS, a Linux-based operating-system architecture centered around filesystem-based Boxes. Each Box is defined by one root-level plain-text TSV file called boxInfo, which is the source of truth for identity, dependencies, paths, and relationships. Boxes are either app-Boxes or etc-Boxes. app-Boxes represent software/packages and use archive names ${type}_${author}_${name}_${version}.box.tar.xz; etc-Boxes represent application configurations and use ${link}_${author}_${name}_${version}.box.tar.xz. A Box's dependencies may be InnerBoxes (in) or OuterBoxes (out). closeBox keeps dependencies inside; openBox allows them to move outward. RealParentBox is logical ownership, while FosterParent is physical placement. BoxKeeper maintains and validates the hierarchy, derives BoxState, detects missing or orphan Boxes, and performs foster-homing. BoxMaker creates or rebuilds Boxes. Boxing creates archives, Unboxing restores them, BoxSending transfers them, and BoxBurning removes them. The system uses Bash, GNU Make, tar, xz, and plain text rather than a central database. Preserve the user's latest specification decisions and do not invent architecture without approval.
