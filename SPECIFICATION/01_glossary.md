@@ -1,4 +1,4 @@
-NaturalBoxOS — Specification: Glossary (G-001 – G-023)
+NaturalBoxOS — Specification: Glossary (G-001 – G-024)
 Status: All 23 terms confirmed.
 
 Naming convention: literal file/folder/command names (e.g. boxInfo, boxMaker, /boxRack) are written exactly as they exist on disk, in code font, wherever they appear. Everywhere else — headings and prose describing the concept — compound terms are hyphenated (e.g. root-box, box-ID, box-maker).
@@ -93,3 +93,12 @@ The single flat folder at the system root (/boxRack) where every box's archive (
 
 G-023 — kardex
 A temporary table built by box-keeper, representing the relations of all boxInfo files across the logical hierarchy. Used for both foster-homing and box-burning.
+
+G-024 — chain-box-info
+A mechanism letting a user describe more of the intended system up front than a single boxInfo allows — since normally the user can only author the root's own /boxInfo and its direct dependency declarations, leaving every deeper box's own boxInfo to be discovered later.
+
+To use it, the user writes additional boxInfo-style files directly in /, alongside the real /boxInfo, one per box they want to pre-describe. Each is named the same way as that box's box-rack archive, but with a .boxInfo extension instead of .box.tar.xz: ${architecture}_${author}_${name}_${version}.boxInfo for a package-box, ${link}_${author}_${name}_${version}.boxInfo for an etc-box.
+
+During installation, whenever box-keeper is about to install a dependency — at any depth in the hierarchy, not just the root's immediate dependencies — it first checks / for a file matching that dependency's box-ID. If found, that file is used as the box's own boxInfo instead of the box being resolved purely from what its real-parent declared. If not found, box-keeper falls back to the real-parent's declaration as usual.
+
+Each chain-box-info file is one-time: it's only consulted the first time that particular box is installed, and is not re-checked on later box-keeping runs.
